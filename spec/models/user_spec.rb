@@ -287,4 +287,144 @@ RSpec.describe User, type: :model do
       end
     end
   end
+
+  describe "website notifications" do
+    let(:user) { create(:user) }
+
+    User::WEBSITE_NOTIFICATION_TYPES.each_key  do |notification_type|
+      it "can be enabled for #{notification_type}" do
+        expect(user.receives_website_notification_of?(notification_type)).to be_falsey
+        user.enable_website_notifications_for(notification_type)
+        expect(user.receives_website_notification_of?(notification_type)).to be_truthy
+      end
+    end
+
+    User::WEBSITE_NOTIFICATION_TYPES.each_key  do |notification_type|
+      it "can be disabled for #{notification_type}" do
+        user.enable_website_notifications_for(notification_type)
+        expect(user.receives_website_notification_of?(notification_type)).to be_truthy
+        user.disable_website_notifications_for(notification_type)
+        expect(user.receives_website_notification_of?(notification_type)).to be_falsey
+      end
+    end
+
+    User::WEBSITE_NOTIFICATION_TYPES.each_key  do |notification_type|
+      it "user with #{notification_type} enabled can be retrieved with a scope" do
+        expect(User.website_notifications_enabled(notification_type)).to be_empty
+        user.enable_website_notifications_for(notification_type)
+        expect(User.website_notifications_enabled(notification_type).pluck(:id)).to include(user.id)
+      end
+    end
+
+    describe "scopes" do
+      let(:graetzl) { create(:graetzl) }
+      let(:user) { create(:user, :graetzl => graetzl) }
+
+      describe "activities within the user's graetzl" do
+        it "returns new meeting activities" do
+          PublicActivity.with_tracking do
+            expect(user.notification_activities(:new_meeting_in_graetzl)).to be_empty
+            meeting = create(:meeting, :graetzl => graetzl) 
+            meeting.create_activity :create, owner: create(:user)
+            activities = user.notification_activities(:new_meeting_in_graetzl)
+            expect(activities.size).to eq(1)
+            meeting_other_graetzl = create(:meeting, graetzl: create(:graetzl))
+            meeting_other_graetzl.create_activity :create, owner: create(:user)
+            activities = user.notification_activities(:new_meeting_in_graetzl)
+            expect(activities.size).to eq(1)
+          end
+        end
+
+        it "returns post activities" do
+          PublicActivity.with_tracking do
+            expect(user.notification_activities(:new_post_in_graetzl)).to be_empty
+            post = create(:post, :graetzl => graetzl, :user => create(:user))
+            post.create_activity :create, owner: create(:user)
+            activities = user.notification_activities(:new_post_in_graetzl)
+            expect(activities.size).to eq(1)
+            post_other_graetzl = create(:post, graetzl: create(:graetzl))
+            post_other_graetzl.create_activity :create, owner: create(:user)
+            activities = user.notification_activities(:new_post_in_graetzl)
+            expect(activities.size).to eq(1)
+          end
+        end
+      end
+
+      it "are combined for all enabled notifications" do
+        PublicActivity.with_tracking do
+          expect(user.notification_activities.size).to eq(0)
+          meeting = create(:meeting, :graetzl => graetzl) 
+          meeting.create_activity :create, owner: create(:user)
+          expect(user.notification_activities.size).to eq(0)
+          user.enable_website_notifications_for(:new_meeting_in_graetzl)
+          expect(user.notification_activities.size).to eq(1)
+
+
+          post = create(:post, :graetzl => graetzl, :user => create(:user))
+          post.create_activity :create, owner: create(:user)
+          expect(user.notification_activities.size).to eq(1)
+          user.enable_website_notifications_for(:new_post_in_graetzl)
+          expect(user.notification_activities.size).to eq(2)
+        end
+      end
+    end
+
+    context "when some notifications are already enabled" do
+      let(:already_enabled) do
+        [
+          :new_meeting_in_graetzl,
+          :organizer_comments_meeting,
+          :private_message_received
+        ]
+      end
+
+      let(:user) { create(:user) }
+
+      before do
+        already_enabled.each do |type|
+          user.enable_website_notifications_for(type)
+        end
+      end
+
+      User::WEBSITE_NOTIFICATION_TYPES.each_key  do |notification_type|
+        it "#{notification_type} can be disabled without changing other settings" do
+          user.enable_website_notifications_for(notification_type)
+          expect(user.receives_website_notification_of?(notification_type)).to be_truthy
+          user.disable_website_notifications_for(notification_type)
+          expect(user.receives_website_notification_of?(notification_type)).to be_falsey
+
+          already_enabled.reject { |t| t == notification_type }.each do |type|
+            expect(user.receives_website_notification_of?(type)).to be_truthy
+          end
+
+          disabled = User::WEBSITE_NOTIFICATION_TYPES.keys.reject do |t| 
+            already_enabled.include?(t) && t != notification_type
+          end
+
+          disabled.each do |type|
+            expect(user.receives_website_notification_of?(type)).to be_falsey
+          end
+        end
+      end
+
+      User::WEBSITE_NOTIFICATION_TYPES.each_key  do |notification_type|
+        it "#{notification_type} can be enabled without changing other settings" do
+          user.enable_website_notifications_for(notification_type)
+          expect(user.receives_website_notification_of?(notification_type)).to be_truthy
+
+          already_enabled.each do |type|
+            expect(user.receives_website_notification_of?(type)).to be_truthy
+          end
+
+          disabled = User::WEBSITE_NOTIFICATION_TYPES.keys.reject do |t| 
+            already_enabled.include?(t) || t == notification_type
+          end
+
+          disabled.each do |type|
+            expect(user.receives_website_notification_of?(type)).to be_falsey
+          end
+        end
+      end
+    end
+  end
 end

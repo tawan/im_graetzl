@@ -43,12 +43,17 @@ group :development do
   gem 'spring'
   # open mail in browser
   gem 'letter_opener'
+  gem 'guard-rspec', require: false
 end
 
 # use rspec and factory for tests
 group :development, :test do
   gem 'rspec-rails'
   gem 'factory_girl_rails'
+  gem 'pry'
+  gem 'pry-remote'
+  gem 'pry-stack_explorer'
+  gem 'pry-debugger'
 end
 
 group :test do  

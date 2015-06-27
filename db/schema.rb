@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20150602141346) do
+ActiveRecord::Schema.define(version: 20150612082414) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -56,10 +56,10 @@ ActiveRecord::Schema.define(version: 20150602141346) do
     t.string   "city"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.spatial  "coordinates",      limit: {:srid=>0, :type=>"point"}
     t.integer  "addressable_id"
     t.string   "addressable_type"
     t.string   "description"
+    t.spatial  "coordinates",      limit: {:srid=>0, :type=>"point"}
   end
 
   add_index "addresses", ["addressable_id", "addressable_type"], :name => "index_addresses_on_addressable_id_and_addressable_type"
@@ -95,8 +95,8 @@ ActiveRecord::Schema.define(version: 20150602141346) do
     t.string   "zip"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.spatial  "area",       limit: {:srid=>0, :type=>"polygon"}
     t.string   "slug"
+    t.spatial  "area",       limit: {:srid=>0, :type=>"polygon"}
   end
 
   add_index "districts", ["slug"], :name => "index_districts_on_slug"
@@ -129,8 +129,8 @@ ActiveRecord::Schema.define(version: 20150602141346) do
     t.string   "name"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.spatial  "area",       limit: {:srid=>0, :type=>"polygon"}
     t.string   "slug"
+    t.spatial  "area",       limit: {:srid=>0, :type=>"polygon"}
   end
 
   add_index "graetzls", ["slug"], :name => "index_graetzls_on_slug"
@@ -164,12 +164,12 @@ ActiveRecord::Schema.define(version: 20150602141346) do
   add_index "posts", ["user_id"], :name => "index_posts_on_user_id"
 
   create_table "users", force: true do |t|
-    t.string   "email",                  default: "",    null: false
-    t.string   "encrypted_password",     default: "",    null: false
+    t.string   "email",                              default: "",    null: false
+    t.string   "encrypted_password",                 default: "",    null: false
     t.string   "reset_password_token"
     t.datetime "reset_password_sent_at"
     t.datetime "remember_created_at"
-    t.integer  "sign_in_count",          default: 0,     null: false
+    t.integer  "sign_in_count",                      default: 0,     null: false
     t.datetime "current_sign_in_at"
     t.datetime "last_sign_in_at"
     t.string   "current_sign_in_ip"
@@ -185,10 +185,12 @@ ActiveRecord::Schema.define(version: 20150602141346) do
     t.string   "last_name"
     t.date     "birthday"
     t.integer  "gender"
-    t.boolean  "newsletter",             default: false, null: false
+    t.boolean  "newsletter",                         default: false, null: false
     t.integer  "graetzl_id"
     t.string   "avatar"
     t.boolean  "admin"
+    t.integer  "website_notifications",              default: 0
+    t.datetime "website_notifications_last_checked"
   end
 
   add_index "users", ["confirmation_token"], :name => "index_users_on_confirmation_token", :unique => true

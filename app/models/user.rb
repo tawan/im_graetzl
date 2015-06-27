@@ -21,6 +21,80 @@ class User < ActiveRecord::Base
   attr_accessor :login
   GENDER_TYPES = { weiblich: 1, männlich: 2, anders: 3 }
 
+  WEBSITE_NOTIFICATION_TYPES = {
+    new_meeting_in_graetzl: {
+      bitmask: 1,
+      scope: ->(user) do
+        s = PublicActivity::Activity.joins([
+          "JOIN meetings ON meetings.id = activities.trackable_id
+          AND activities.trackable_type = E'Meeting'
+          AND meetings.graetzl_id = :user_graetzl_id
+          ", user_graetzl_id: user.graetzl_id])
+      end
+    },
+    new_post_in_graetzl: {
+      bitmask: 2,
+      scope: ->(user) do
+        s = PublicActivity::Activity.where( trackable_type: 'Post' )
+        s = s.joins("JOIN posts ON posts.id = activities.trackable_id")
+        s = s.joins("JOIN users ON posts.graetzl_id = users.graetzl_id")
+      end
+    },
+    meeting_changed: { bitmask: 4 },
+    meeting_canceled: { bitmask: 8 },
+    organizer_comments_meeting: { bitmask: 16 },
+    user_comments_meeting: { bitmask: 32 },
+    new_participant_of_my_meeting: { bitmask: 64 },
+    user_comments_my_meeting: { bitmask: 128 },
+    participant_cancels: { bitmask: 256 },
+    private_message_received: { bitmask: 512 },
+    graetzl_newsletter: { bitmask: 1024 }
+  }
+
+  def self.website_notifications_enabled(type)
+    bit_mask = WEBSITE_NOTIFICATION_TYPES[type][:bitmask]
+    where(["(website_notifications & :bit_mask) > 0", { bit_mask: bit_mask } ])
+  end
+
+  def notification_activities(type = nil)
+    unless type.nil?
+      s = WEBSITE_NOTIFICATION_TYPES[type][:scope].call(self)
+      s.where(["users.id = :user_id", user_id: self.id ])
+    else
+      enabled_scopes = []
+      WEBSITE_NOTIFICATION_TYPES.keys.each do |k|
+        if receives_website_notification_of?(k)
+          enabled_scopes << WEBSITE_NOTIFICATION_TYPES[k][:scope].call(self)
+        end
+      end
+
+      return [] if enabled_scopes.empty?
+      s = PublicActivity::Activity.where(["users.id = :user_id", user_id: self.id ])
+      enabled_scopes.inject(s) do |result, s|
+        result = result.merge(s)
+        result
+      end
+    end
+  end
+
+  def notification_activities_2
+    s = PublicActivity::Activity..joins(
+          "JOIN meetings ON meetings.id = activities.trackable_id
+          AND activities.trackable_type = E'Meeting'"
+    )
+    s = s.joins(
+      "JOIN posts ON posts.id = activities.trackable_id
+      AND activities.trackable_type = E'Post'"
+    )
+    s = s.joins("
+      JOIN users ON
+      posts.graetzl_id = users.graetzl_id
+      OR meetings.graetzl_id = users.graetzl_id"
+    )
+    s = s.where(["users.id = :user_id", user_id: self.id ])
+
+  end
+
   # validations
   validates :graetzl, presence: true
   validates :username, presence: true, uniqueness: { case_sensitive: false }, length: { maximum: 50 }
@@ -65,4 +139,21 @@ class User < ActiveRecord::Base
     going_tos.create(meeting_id: meeting.id, role: role)
   end
 
+  def receives_website_notification_of?(type)
+    website_notifications & WEBSITE_NOTIFICATION_TYPES[type][:bitmask] > 0
+  end
+
+  def enable_website_notifications_for(type)
+    new_setting = website_notifications | WEBSITE_NOTIFICATION_TYPES[type][:bitmask] 
+    update_attribute(:website_notifications, new_setting)
+  end
+
+  def disable_website_notifications_for(type)
+    mask = WEBSITE_NOTIFICATION_TYPES.values.inject(0) do |sum, val|
+      sum = sum | val[:bitmask]
+      sum
+    end
+    new_setting = (mask ^ WEBSITE_NOTIFICATION_TYPES[type][:bitmask]) & website_notifications 
+    update_attribute(:website_notifications, new_setting)
+  end
 end
