@@ -25,19 +25,19 @@ class User < ActiveRecord::Base
     new_meeting_in_graetzl: {
       bitmask: 1,
       scope: ->(user) do
-        s = PublicActivity::Activity.joins([
-          "JOIN meetings ON meetings.id = activities.trackable_id
+        s = PublicActivity::Activity.joins(sanitize_sql_array([
+          "LEFT JOIN meetings ON meetings.id = activities.trackable_id
           AND activities.trackable_type = E'Meeting'
-          AND meetings.graetzl_id = :user_graetzl_id
-          ", user_graetzl_id: user.graetzl_id])
+          AND meetings.graetzl_id = %s", user.graetzl_id ]))
       end
     },
     new_post_in_graetzl: {
       bitmask: 2,
       scope: ->(user) do
-        s = PublicActivity::Activity.where( trackable_type: 'Post' )
-        s = s.joins("JOIN posts ON posts.id = activities.trackable_id")
-        s = s.joins("JOIN users ON posts.graetzl_id = users.graetzl_id")
+        s = PublicActivity::Activity.joins(sanitize_sql_array(["
+        JOIN posts ON posts.id = activities.trackable_id
+        AND activities.trackable_type = E'Post'
+        AND posts.graetzl_id = %s", user.graetzl_id ]))
       end
     },
     meeting_changed: { bitmask: 4 },
@@ -58,41 +58,20 @@ class User < ActiveRecord::Base
 
   def notification_activities(type = nil)
     unless type.nil?
-      s = WEBSITE_NOTIFICATION_TYPES[type][:scope].call(self)
-      s.where(["users.id = :user_id", user_id: self.id ])
+      WEBSITE_NOTIFICATION_TYPES[type][:scope].call(self)
     else
-      enabled_scopes = []
-      WEBSITE_NOTIFICATION_TYPES.keys.each do |k|
-        if receives_website_notification_of?(k)
-          enabled_scopes << WEBSITE_NOTIFICATION_TYPES[k][:scope].call(self)
-        end
+      enabled_types = [ ]
+      WEBSITE_NOTIFICATION_TYPES.keys.each do |type|
+        enabled_types << type if receives_website_notification_of?(type)
       end
 
-      return [] if enabled_scopes.empty?
-      s = PublicActivity::Activity.where(["users.id = :user_id", user_id: self.id ])
-      enabled_scopes.inject(s) do |result, s|
-        result = result.merge(s)
-        result
+      return [ ] if enabled_types.empty?
+
+      enabled_types.inject(PublicActivity::Activity.where("1 = 1")) do |r, type|
+        r = r.merge(WEBSITE_NOTIFICATION_TYPES[type][:scope].call(self))
+        r
       end
     end
-  end
-
-  def notification_activities_2
-    s = PublicActivity::Activity..joins(
-          "JOIN meetings ON meetings.id = activities.trackable_id
-          AND activities.trackable_type = E'Meeting'"
-    )
-    s = s.joins(
-      "JOIN posts ON posts.id = activities.trackable_id
-      AND activities.trackable_type = E'Post'"
-    )
-    s = s.joins("
-      JOIN users ON
-      posts.graetzl_id = users.graetzl_id
-      OR meetings.graetzl_id = users.graetzl_id"
-    )
-    s = s.where(["users.id = :user_id", user_id: self.id ])
-
   end
 
   # validations
