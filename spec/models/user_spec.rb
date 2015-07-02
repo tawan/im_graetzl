@@ -320,36 +320,6 @@ RSpec.describe User, type: :model do
       let(:graetzl) { create(:graetzl) }
       let(:user) { create(:user, :graetzl => graetzl) }
 
-      describe "activities within the user's graetzl" do
-        it "returns new meeting activities" do
-          PublicActivity.with_tracking do
-            expect(user.notification_activities(:new_meeting_in_graetzl)).to be_empty
-            meeting = create(:meeting, :graetzl => graetzl) 
-            meeting.create_activity :create, owner: create(:user)
-            activities = user.notification_activities(:new_meeting_in_graetzl)
-            expect(activities.size).to eq(1)
-            meeting_other_graetzl = create(:meeting, graetzl: create(:graetzl))
-            meeting_other_graetzl.create_activity :create, owner: create(:user)
-            activities = user.notification_activities(:new_meeting_in_graetzl)
-            expect(activities.size).to eq(1)
-          end
-        end
-
-        it "returns post activities" do
-          PublicActivity.with_tracking do
-            expect(user.notification_activities(:new_post_in_graetzl)).to be_empty
-            post = create(:post, :graetzl => graetzl, :user => create(:user))
-            post.create_activity :create, owner: create(:user)
-            activities = user.notification_activities(:new_post_in_graetzl)
-            expect(activities.size).to eq(1)
-            post_other_graetzl = create(:post, graetzl: create(:graetzl))
-            post_other_graetzl.create_activity :create, owner: create(:user)
-            activities = user.notification_activities(:new_post_in_graetzl)
-            expect(activities.size).to eq(1)
-          end
-        end
-      end
-
       it "are combined for all enabled notifications" do
         PublicActivity.with_tracking do
           expect(user.notification_activities.size).to eq(0)
@@ -362,6 +332,8 @@ RSpec.describe User, type: :model do
 
           post = create(:post, :graetzl => graetzl, :user => create(:user))
           post.create_activity :create, owner: create(:user)
+          require 'pry-remote'
+          binding.pry-remote
           expect(user.notification_activities.size).to eq(1)
           user.enable_website_notifications_for(:new_post_in_graetzl)
           expect(user.notification_activities.size).to eq(2)

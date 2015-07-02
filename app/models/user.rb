@@ -35,7 +35,7 @@ class User < ActiveRecord::Base
       bitmask: 2,
       scope: ->(user) do
         s = PublicActivity::Activity.joins(sanitize_sql_array(["
-        JOIN posts ON posts.id = activities.trackable_id
+        LEFT JOIN posts ON posts.id = activities.trackable_id
         AND activities.trackable_type = E'Post'
         AND posts.graetzl_id = %s", user.graetzl_id ]))
       end
@@ -67,7 +67,7 @@ class User < ActiveRecord::Base
 
       return [ ] if enabled_types.empty?
 
-      enabled_types.inject(PublicActivity::Activity.where("1 = 1")) do |r, type|
+      enabled_types.inject(PublicActivity::Activity.where("trackable_id IS NOT NULL")) do |r, type|
         r = r.merge(WEBSITE_NOTIFICATION_TYPES[type][:scope].call(self))
         r
       end
